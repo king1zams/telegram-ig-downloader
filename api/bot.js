@@ -1,21 +1,26 @@
- const { Telegraf } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
 const botToken = process.env.BOT_TOKEN;
 
-// Mencegah serverless function crash jika token tidak ditemukan
 if (!botToken) {
     console.error('BOT_TOKEN is not set in environment variables!');
 }
 
 const bot = new Telegraf(botToken || 'DUMMY_TOKEN');
 
-bot.start((ctx) => {
-    return ctx.reply('Halo! bos ceo izams Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media.');
+// Menangani perintah /start secara eksplisit agar lebih stabil
+bot.command('start', (ctx) => {
+    return ctx.reply('Halo CEO Izams,Silahkan Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media.');
 });
 
 bot.on('text', async (ctx) => {
     const text = ctx.message.text;
+
+    // Abaikan jika pesan berupa command lain
+    if (text.startsWith('/')) {
+        return; 
+    }
 
     if (text.includes('instagram.com')) {
         await ctx.reply('🔄 Sedang memproses konten Instagram, mohon tunggu sebentar...');
@@ -24,7 +29,6 @@ bot.on('text', async (ctx) => {
             const apiUrl = `https://api.betabotz.org/api/download/instagram?url=${encodeURIComponent(text)}`;
             const response = await axios.get(apiUrl);
 
-            // Cek apakah API merespons dengan data yang benar
             if (response.data && response.data.result) {
                 const result = response.data.result;
                 
