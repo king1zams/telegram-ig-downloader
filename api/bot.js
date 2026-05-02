@@ -1,5 +1,4 @@
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
 
 const botToken = process.env.BOT_TOKEN;
 
@@ -9,51 +8,24 @@ if (!botToken) {
 
 const bot = new Telegraf(botToken || 'DUMMY_TOKEN');
 
-// Menangani perintah /start
-bot.command('start', (ctx) => {
-    return ctx.reply('Halo! Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media.');
+// Tes perintah start
+bot.start((ctx) => {
+    return ctx.reply('Halo! Bot berhasil terhubung dan merespons.');
 });
 
-// Menangani teks
-bot.on('text', async (ctx) => {
-    const text = ctx.message.text;
-
-    if (text.startsWith('/')) {
-        return;
-    }
-
-    if (text.includes('instagram.com')) {
-        await ctx.reply('🔄 Sedang memproses konten Instagram, mohon tunggu sebentar...');
-        
-        try {
-            const apiUrl = `https://api.betabotz.org/api/download/instagram?url=${encodeURIComponent(text)}`;
-            const response = await axios.get(apiUrl);
-
-            if (response.data && response.data.result) {
-                const result = response.data.result;
-                
-                if (result.length > 0) {
-                    const mediaUrl = result[0].url;
-
-                    if (result[0].type === 'image') {
-                        return ctx.replyWithPhoto({ url: mediaUrl }, { caption: '✅ Berhasil! Foto Instagram.' });
-                    } else {
-                        return ctx.replyWithVideo({ url: mediaUrl }, { caption: '✅ Berhasil! Video Instagram.' });
-                    }
-                } else {
-                    return ctx.reply('❌ Gagal mengambil data. Pastikan link benar dan akun tidak di-private.');
-                }
-            } else {
-                return ctx.reply('❌ Server API Instagram sedang gangguan atau tidak merespons.');
-            }
-        } catch (error) {
-            console.error('Error processing Instagram link:', error);
-            return ctx.reply('❌ Terjadi kesalahan pada server saat memproses link Instagram.');
-        }
-    } else {
-        return ctx.reply('Silakan kirimkan link Instagram yang valid (contoh: https://www.instagram.com/reel/...)');
-    }
+// Tes echo (bot akan mengulangi pesan yang kamu kirim)
+bot.on('message', (ctx) => {
+    const text = ctx.message.text || 'Bukan pesan teks';
+    return ctx.reply(`Pesan diterima: ${text}`);
 });
 
-// Menggunakan callback webhook bawaan Telegraf
-module.exports = bot.webhookCallback('/api/bot');
+module.exports = async (req, res) => {
+    try {
+        await bot.handleUpdate(req.body, res);
+        return res.status(200).send('OK');
+    } catch (err) {
+        console.error('Error handling update:', err);
+        // Mengembalikan status 200 agar Telegram tidak melakukan spam/retrying
+        return res.status(200).send('OK'); 
+    }
+};
