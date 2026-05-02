@@ -4,9 +4,9 @@ module.exports = async (req, res) => {
     // Token bot Telegram Anda
     const token = '8647517615:AAGmZNTK_dwebq8_y33LADbEFjoXLODFfs4';
     
-    // Ambil kunci dari Environment Variable
+    // Ambil kunci dari Environment Variables
     const rapidApiKey = process.env.RAPIDAPI_KEY;
-    const rapidApiHost = 'instagram120.p.rapidapi.com';
+    const rapidApiHost = 'instagram120.p.rapidapi.com'; // Menggunakan host RapidAPI Anda
 
     // Pastikan request dari Telegram ada isinya
     if (!req.body || !req.body.message) {
@@ -20,7 +20,16 @@ module.exports = async (req, res) => {
     if (text === '/start') {
         await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
             chat_id: chatId,
-            text: 'Halo! Kirimkan username Instagram (tanpa @) untuk melihat postingan terbaru.'
+            text: 'Halo! Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media berkualitas HD.'
+        });
+        return res.status(200).send('OK');
+    }
+
+    // Jika pesan bukan link instagram
+    if (!text.includes('instagram.com')) {
+        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: 'Silakan kirimkan link Instagram yang valid (contoh: https://www.instagram.com/reel/...)'
         });
         return res.status(200).send('OK');
     }
@@ -28,64 +37,55 @@ module.exports = async (req, res) => {
     // Beri tahu pengguna bahwa proses sedang berjalan
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
         chat_id: chatId,
-        text: '🔄 Sedang mengambil postingan, mohon tunggu sebentar...'
+        text: '🔄 Sedang memproses konten Instagram (HD), mohon tunggu sebentar...'
     });
 
     try {
         const options = {
-            method: 'POST',
-            url: `https://${rapidApiHost}/api/instagram/posts`,
-            headers: {
-                'x-rapidapi-key': rapidApiKey,
-                'x-rapidapi-host': rapidApiHost,
-                'Content-Type': 'application/json'
+            method: 'GET',
+            url: `https://${rapidApiHost}/`, 
+            params: {
+                url: text
             },
-            data: {
-                username: text, // Menggunakan teks yang dikirim pengguna sebagai username
-                maxId: ''
+            headers: {
+                'X-RapidAPI-Key': rapidApiKey,
+                'X-RapidAPI-Host': rapidApiHost
             }
         };
 
         const response = await axios.request(options);
         const data = response.data;
+        
+        // Mengambil URL berdasarkan struktur respons umum RapidAPI
+        let mediaUrl = data.url || (data.links && data.links.length > 0 ? data.links[0].url : null) || data.video_url || data.thumbnail_url;
+        let mediaType = data.type || 'video';
 
-        // Memeriksa apakah postingan ditemukan
-        if (data && data.items && data.items.length > 0) {
-            const post = data.items[0];
-            const mediaUrl = post.thumbnail_url || post.video_url || post.display_url;
-            
-            if (mediaUrl) {
-                if (post.media_type === 2) { // Tipe Video
-                    await axios.post(`https://api.telegram.org/bot${token}/sendVideo`, {
-                        chat_id: chatId,
-                        video: mediaUrl,
-                        caption: `✅ Berhasil! Postingan dari @${text}`
-                    });
-                } else { // Tipe Foto
-                    await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, {
-                        chat_id: chatId,
-                        photo: mediaUrl,
-                        caption: `✅ Berhasil! Postingan dari @${text}`
-                    });
-                }
-            } else {
-                await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+        if (mediaUrl) {
+            if (mediaType === 'image' || mediaUrl.match(/\.(jpeg|jpg|png)/i)) {
+                await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, {
                     chat_id: chatId,
-                    text: '❌ Tidak dapat menemukan media pada postingan tersebut.'
+                    photo: mediaUrl,
+                    caption: '✅ Berhasil! Foto Instagram HD.'
+                });
+            } else {
+                await axios.post(`https://api.telegram.org/bot${token}/sendVideo`, {
+                    chat_id: chatId,
+                    video: mediaUrl,
+                    caption: '✅ Berhasil! Video Instagram HD.'
                 });
             }
         } else {
             await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
                 chat_id: chatId,
-                text: '❌ Tidak ada postingan ditemukan atau username tidak valid.'
+                text: '❌ Gagal menemukan URL media. Pastikan link bukan dari akun yang di-private.'
             });
         }
 
     } catch (error) {
-        console.error('Error fetching RapidAPI data:', error);
+        console.error('Error processing RapidAPI request:', error);
         await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
             chat_id: chatId,
-            text: '❌ Terjadi kesalahan pada server saat mengambil data Instagram.'
+            text: '❌ Terjadi kesalahan pada server saat memproses link Anda. Pastikan RapidAPI Key Anda masih aktif.'
         });
     }
 
