@@ -9,17 +9,17 @@ if (!botToken) {
 
 const bot = new Telegraf(botToken || 'DUMMY_TOKEN');
 
-// Menangani perintah /start secara eksplisit agar lebih stabil
+// Menangani perintah /start
 bot.command('start', (ctx) => {
-    return ctx.reply('Halo CEO Izams,Silahkan Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media.');
+    return ctx.reply('Halo! Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media.');
 });
 
+// Menangani teks
 bot.on('text', async (ctx) => {
     const text = ctx.message.text;
 
-    // Abaikan jika pesan berupa command lain
     if (text.startsWith('/')) {
-        return; 
+        return;
     }
 
     if (text.includes('instagram.com')) {
@@ -55,16 +55,5 @@ bot.on('text', async (ctx) => {
     }
 });
 
-module.exports = async (req, res) => {
-    if (req.method === 'POST') {
-        try {
-            await bot.handleUpdate(req.body, res);
-            return res.status(200).send('OK');
-        } catch (err) {
-            console.error('Error handling update:', err);
-            return res.status(500).send('Internal Server Error');
-        }
-    } else {
-        return res.status(200).send('Bot is running!');
-    }
-};
+// Menggunakan callback webhook bawaan Telegraf
+module.exports = bot.webhookCallback('/api/bot');
