@@ -1,75 +1,96 @@
-const { Telegraf } = require('telegraf');
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-    // Token bot Anda saat ini
-    const botToken = '8647517615:AAGmZNTK_dwebq8_y33LADbEFjoXLODFfs4';
+    // Token bot Anda
+    const token = '8647517615:AAGmZNTK_dwebq8_y33LADbEFjoXLODFfs4';
 
-    const bot = new Telegraf(botToken);
+    // Pastikan request dari Telegram ada isinya
+    if (!req.body || !req.body.message) {
+        return res.status(200).send('OK');
+    }
 
-    // Menangani perintah /start
-    bot.start((ctx) => {
-        return ctx.reply('Halo! Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media berkualitas HD.');
-    });
+    const chatId = req.body.message.chat.id;
+    const text = req.body.message.text;
 
-    // Menangani pesan teks
-    bot.on('text', async (ctx) => {
-        const text = ctx.message.text;
+    // Jika pengguna mengetik perintah /start
+    if (text === '/start') {
+        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: 'Halo! Kirimkan link Instagram (Reels atau Foto) untuk mengunduh media berkualitas HD.'
+        });
+        return res.status(200).send('OK');
+    }
 
-        if (text.startsWith('/')) {
-            return;
-        }
+    // Jika pesan bukan link instagram
+    if (!text.includes('instagram.com')) {
+        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: 'Silakan kirimkan link Instagram yang valid (contoh: https://www.instagram.com/reel/...)'
+        });
+        return res.status(200).send('OK');
+    }
 
-        if (text.includes('instagram.com')) {
-            await ctx.reply('🔄 Sedang memproses konten Instagram (HD), mohon tunggu sebentar...');
-            
-            try {
-                const response = await axios.post('https://api.cobalt.tools/api/json', {
-                    url: text,
-                    vQuality: 'max' // Meminta kualitas tertinggi / HD
-                }, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                const data = response.data;
-
-                if (data && (data.url || (data.picker && data.picker.length > 0))) {
-                    let mediaUrl = data.url;
-                    
-                    if (!mediaUrl && data.picker && data.picker.length > 0) {
-                        mediaUrl = data.picker[0].url;
-                    }
-
-                    if (mediaUrl) {
-                        // Memisahkan penanganan video atau foto berdasarkan respons
-                        if (data.type === 'video' || (!data.type && !mediaUrl.match(/\.(jpeg|jpg|png)/i))) {
-                            return ctx.replyWithVideo({ url: mediaUrl }, { caption: '✅ Berhasil! Video Instagram HD.' });
-                        } else {
-                            return ctx.replyWithPhoto({ url: mediaUrl }, { caption: '✅ Berhasil! Foto Instagram HD.' });
-                        }
-                    } else {
-                        return ctx.reply('❌ Gagal mengambil URL media dari server.');
-                    }
-                } else {
-                    return ctx.reply('❌ Gagal mengambil data. Pastikan link benar dan akun tidak di-private.');
-                }
-            } catch (error) {
-                console.error('Error with Cobalt API:', error);
-                return ctx.reply('❌ Terjadi kesalahan pada server saat memproses link Instagram.');
-            }
-        } else {
-            return ctx.reply('Silakan kirimkan link Instagram yang valid (contoh: https://www.instagram.com/reel/...)');
-        }
+    // Beri tahu pengguna bahwa proses sedang berjalan
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+        chat_id: chatId,
+        text: '🔄 Sedang memproses konten Instagram, mohon tunggu sebentar...'
     });
 
     try {
-        await bot.handleUpdate(req.body, res);
-        return res.status(200).send('OK');
-    } catch (err) {
-        console.error('Error handling update:', err);
-        return res.status(200).send('OK'); // Mencegah retrying dari Telegram
+        // Menggunakan API publik alternatif yang lebih stabil
+        const apiUrl = `https://api.siputzx.my.id/api/download/ig?url=${encodeURIComponent(text)}`;
+        const response = await axios.get(apiUrl);
+
+        const data = response.data;
+
+        if (data && data.result) {
+            const result = data.result;
+            let mediaUrl = null;
+            let mediaType = null;
+
+            // Mendeteksi apakah result berupa array atau objek
+            if (Array.isArray(result) && result.length > 0) {
+                mediaUrl = result[0].url;
+                mediaType = result[0].type;
+            } else if (typeof result === 'object' && result.url) {
+                mediaUrl = result.url;
+                mediaType = result.type;
+            }
+
+            if (mediaUrl) {
+                if (mediaType === 'image') {
+                    await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                        chat_id: chatId,
+                        photo: mediaUrl,
+                        caption: '✅ Berhasil! Foto Instagram.'
+                    });
+                } else {
+                    await axios.post(`https://api.telegram.org/bot${token}/sendVideo`, {
+                        chat_id: chatId,
+                        video: mediaUrl,
+                        caption: '✅ Berhasil! Video Instagram.'
+                    });
+                }
+            } else {
+                await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    chat_id: chatId,
+                    text: '❌ Gagal menemukan URL media. Pastikan link tidak berasal dari akun yang di-private.'
+                });
+            }
+        } else {
+            await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+                chat_id: chatId,
+                text: '❌ Gagal mengambil data dari server, API mungkin sedang tidak aktif.'
+            });
+        }
+
+    } catch (error) {
+        console.error('Error processing request:', error);
+        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+            chat_id: chatId,
+            text: '❌ Terjadi kesalahan pada server saat memproses link Anda.'
+        });
     }
+
+    return res.status(200).send('OK');
 };
