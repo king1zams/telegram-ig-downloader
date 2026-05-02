@@ -1,14 +1,10 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-    // Token bot Telegram Anda
     const token = '8647517615:AAGmZNTK_dwebq8_y33LADbEFjoXLODFfs4';
-    
-    // Ambil kunci dari Environment Variables
     const rapidApiKey = process.env.RAPIDAPI_KEY || 'df6fd0d8e3msh10330fcee0931aep1a19ffjsnf475ff12048a';
     const rapidApiHost = 'instagram120.p.rapidapi.com';
 
-    // Pastikan request dari Telegram ada isinya
     if (!req.body || !req.body.message) {
         return res.status(200).send('OK');
     }
@@ -16,7 +12,6 @@ module.exports = async (req, res) => {
     const chatId = req.body.message.chat.id;
     const text = req.body.message.text;
 
-    // Jika pengguna mengetik perintah /start
     if (text === '/start') {
         await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
             chat_id: chatId,
@@ -25,15 +20,13 @@ module.exports = async (req, res) => {
         return res.status(200).send('OK');
     }
 
-    // Mengabaikan perintah lain agar tidak error
     if (text.startsWith('/')) {
         return res.status(200).send('OK');
     }
 
-    // Beri tahu pengguna bahwa proses sedang berjalan
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
         chat_id: chatId,
-        text: '🔄 Sedang mengambil postingan, mohon tunggu sebentar...'
+        text: '🔄 Sedang memeriksa akun, mohon tunggu sebentar...'
     });
 
     try {
@@ -46,7 +39,7 @@ module.exports = async (req, res) => {
                 'Content-Type': 'application/json'
             },
             data: {
-                username: text, // Menggunakan teks yang dikirim pengguna sebagai username
+                username: text,
                 maxId: ''
             }
         };
@@ -54,19 +47,21 @@ module.exports = async (req, res) => {
         const response = await axios.request(options);
         const data = response.data;
 
-        // Memeriksa apakah data postingan ditemukan
+        // Cetak respons ke log Vercel untuk debugging
+        console.log('--- RESPON API ---', JSON.stringify(data, null, 2));
+
         if (data && data.items && data.items.length > 0) {
             const post = data.items[0];
             const mediaUrl = post.video_url || post.thumbnail_url || post.display_url;
             
             if (mediaUrl) {
-                if (post.media_type === 2) { // Tipe Video
+                if (post.media_type === 2) {
                     await axios.post(`https://api.telegram.org/bot${token}/sendVideo`, {
                         chat_id: chatId,
                         video: mediaUrl,
                         caption: `✅ Berhasil! Postingan dari @${text}`
                     });
-                } else { // Tipe Foto
+                } else {
                     await axios.post(`https://api.telegram.org/bot${token}/sendPhoto`, {
                         chat_id: chatId,
                         photo: mediaUrl,
@@ -76,13 +71,14 @@ module.exports = async (req, res) => {
             } else {
                 await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
                     chat_id: chatId,
-                    text: '❌ Tidak dapat menemukan media pada postingan tersebut.'
+                    text: '❌ Media tidak ditemukan pada postingan tersebut.'
                 });
             }
         } else {
+            // Beri tahu pengguna dan tampilkan sebagian struktur mentah jika kosong
             await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
                 chat_id: chatId,
-                text: '❌ Tidak ada postingan ditemukan atau username tidak valid. Pastikan akun tidak di-private.'
+                text: `❌ Tidak ditemukan postingan. Cek Vercel Logs untuk melihat data yang dikirim oleh API.`
             });
         }
 
